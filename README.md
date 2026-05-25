@@ -4,6 +4,39 @@ DockerForge-AI is an AI-powered Dockerfile generator. It accepts a public GitHub
 
 ## Architecture
 
+DockerForge-AI is organized as a Streamlit orchestration layer plus small utility modules for cloning, analysis, LLM generation, Docker build validation, retry repair, and runtime verification.
+
+```text
+User enters GitHub URL
+        |
+        v
+Streamlit UI app.py
+        |
+        v
+clone_repo.py clones the public repository into repos/
+        |
+        v
+analyzer.py detects files, frameworks, package scripts, ports, and env hints
+        |
+        v
+generator.py sends repository analysis to Gemini and saves generated/Dockerfile
+        |
+        v
+builder.py runs docker build and captures build logs
+        |
+        +-- build fails --> retry_agent.py sends logs + Dockerfile to Gemini
+        |                  and regenerates Dockerfile, then rebuilds
+        |
+        v
+runner.py starts the built image and checks whether it stays alive
+        |
+        +-- runtime fails --> retry_agent.py sends container logs to Gemini
+        |                    and retries with a corrected Dockerfile
+        |
+        v
+Container success message and logs shown in the UI
+```
+
 - `app.py`: Streamlit UI and workflow orchestration.
 - `utils/clone_repo.py`: GitHub URL validation and GitPython clone logic.
 - `utils/analyzer.py`: Repository structure, file, framework, and stack detection.
@@ -15,6 +48,13 @@ DockerForge-AI is an AI-powered Dockerfile generator. It accepts a public GitHub
 - `repos/`: Stores cloned repositories locally.
 
 ## Setup
+
+Prerequisites:
+
+- Python 3.10 or newer.
+- Docker Desktop running locally.
+- A Google Gemini API key.
+- Git installed and available on PATH.
 
 ```bash
 python -m venv venv
@@ -56,6 +96,8 @@ Default model:
 genai.GenerativeModel("gemini-2.5-flash")
 ```
 
+Gemini was selected because it is fast enough for an interactive Streamlit workflow, has strong code-generation ability for Dockerfiles and build-log repair, and supports a practical context window for sending repository analysis plus recent Docker error output. The app uses model fallback logic so it can continue if the preferred Gemini model is unavailable.
+
 ## Docker Usage
 
 Build DockerForge-AI itself:
@@ -82,8 +124,12 @@ Add screenshots to the `screenshots/` directory after running a demo.
 
 - Generated Dockerfiles depend on repository quality and Gemini output.
 - Some repositories require secrets, databases, private package registries, or custom runtime configuration.
-- Container startup verification checks whether the container stays alive briefly; it does not perform deep health checks.
+- Repositories with databases may need runtime variables such as `MONGODB_URI`, `DATABASE_URL`, or `JWT_SECRET`. When the target service runs on the host machine from inside Docker Desktop, `host.docker.internal` may be required instead of `localhost`.
+- Container startup verification checks whether the container stays alive briefly; it does not perform deep HTTP health checks for every possible framework.
 - Docker-in-Docker style execution requires access to the Docker daemon.
+- Private GitHub repositories are not supported by the current clone flow.
+- Projects that require paid APIs, cloud credentials, custom native system packages, or multi-service orchestration may still need manual Dockerfile edits.
+- The retry loop is limited to a small number of attempts to avoid infinite build/regeneration cycles.
 
 ## Future Improvements
 
