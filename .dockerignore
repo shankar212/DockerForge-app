@@ -1,0 +1,17 @@
+.env
+.git
+.gitignore
+.streamlit/secrets.toml
+
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+venv/
+.venv/
+
+generated/
+repos/
+screenshots/
+
+*.log
