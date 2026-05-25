@@ -33,7 +33,8 @@ Rules:
 - Prefer small official base images.
 - Include system packages only when needed.
 - For Python apps, install requirements.txt when present.
-- For Flask/FastAPI/Streamlit, expose the most likely app port and provide a valid CMD.
+- For Streamlit apps, expose port 8501 and use CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"] when app.py exists.
+- For Flask/FastAPI apps, expose the most likely app port and provide a valid CMD.
 - For Node/React apps, use npm install/npm ci, build when appropriate, and run a sensible production command.
 - For Express/API apps, prefer the package.json start script, set a non-secret PORT default when detectable, and expose the detected/default API port.
 - Do not bake secret runtime environment values into the image. Document them only through ENV defaults when they are safe non-secret values such as PORT or NODE_ENV.

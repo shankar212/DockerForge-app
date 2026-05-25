@@ -23,6 +23,7 @@ def fix_dockerfile(
     build_logs: str,
     attempt: int,
     repository_analysis: dict[str, Any] | None = None,
+    failure_stage: str = "Docker build",
     max_log_chars: int = 18_000,
 ) -> str:
     analysis_context = ""
@@ -34,18 +35,18 @@ Repository analysis:
 
     prompt = f"""
 You are DockerForge-AI's retry agent.
-The Docker build failed on retry attempt {attempt}.
+The {failure_stage} failed on retry attempt {attempt}.
 
 {analysis_context}
 
 Current Dockerfile:
 {current_dockerfile}
 
-Docker build logs:
+Failure logs:
 {build_logs[-max_log_chars:]}
 
 Return only a corrected Dockerfile. No markdown and no explanation.
-Fix the actual build failure while keeping the Dockerfile compatible with the same repository build context.
+Fix the actual failure while keeping the Dockerfile compatible with the same repository build context.
 """.strip()
 
     try:

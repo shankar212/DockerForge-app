@@ -107,6 +107,7 @@ if run_clicked:
 
         image_tag = None
         build_result = None
+        run_result = None
         for attempt in range(1, MAX_RETRIES + 2):
             retry_placeholder.metric("Build attempt", attempt)
             status_placeholder.info(f"Running docker build, attempt {attempt}...")
@@ -130,7 +131,45 @@ if run_clicked:
 
             if build_result["success"]:
                 status_placeholder.success("Docker image built successfully.")
-                break
+                status_placeholder.info("Starting generated container...")
+                run_result = run_container(str(build_result["image_tag"]), env=runtime_env)
+
+                if run_result["success"]:
+                    status_placeholder.success("Container started successfully.")
+                    st.write(f"Container: `{run_result['container_name']}`")
+                    if run_result.get("ports"):
+                        st.write(f"Published ports: `{run_result['ports']}`")
+                    break
+
+                runtime_logs = str(run_result.get("logs", ""))
+                runtime_logs_path = Path("generated") / f"runtime_attempt_{attempt}.log"
+                runtime_logs_path.write_text(runtime_logs, encoding="utf-8")
+                status_placeholder.error(
+                    "Image built, but the container did not stay running. Sending runtime logs to Gemini..."
+                )
+                logs_placeholder.subheader("Container logs")
+                logs_placeholder.text_area(
+                    "Docker container output",
+                    runtime_logs,
+                    height=260,
+                    key=f"docker_runtime_output_{attempt}",
+                )
+
+                if attempt > MAX_RETRIES:
+                    st.stop()
+
+                dockerfile_content = fix_dockerfile(
+                    current_dockerfile=dockerfile_content,
+                    build_logs=runtime_logs,
+                    attempt=attempt,
+                    repository_analysis=analysis,
+                    failure_stage="container startup",
+                )
+                save_dockerfile(dockerfile_content, GENERATED_DOCKERFILE)
+                show_dockerfile(dockerfile_content)
+                status_placeholder.info(f"Retrying automatically with runtime-repaired Dockerfile, attempt {attempt + 1}...")
+                image_tag = None
+                continue
 
             if build_result.get("infrastructure_error"):
                 status_placeholder.error(
@@ -150,24 +189,15 @@ if run_clicked:
                 build_logs=logs,
                 attempt=attempt,
                 repository_analysis=analysis,
+                failure_stage="Docker build",
             )
             save_dockerfile(dockerfile_content, GENERATED_DOCKERFILE)
             show_dockerfile(dockerfile_content)
             status_placeholder.info(f"Retrying automatically with repaired Dockerfile, attempt {attempt + 1}...")
 
-        if not build_result or not build_result["success"]:
-            st.error("No successful image was produced.")
+        if not build_result or not build_result["success"] or not run_result or not run_result["success"]:
+            st.error("No successful running container was produced.")
             st.stop()
-
-        status_placeholder.info("Starting generated container...")
-        run_result = run_container(str(build_result["image_tag"]), env=runtime_env)
-        if run_result["success"]:
-            status_placeholder.success("Container started successfully.")
-            st.write(f"Container: `{run_result['container_name']}`")
-            if run_result.get("ports"):
-                st.write(f"Published ports: `{run_result['ports']}`")
-        else:
-            status_placeholder.error("Image built, but the container did not stay running.")
 
         with st.expander("Container logs", expanded=not run_result["success"]):
             st.text(run_result.get("logs", ""))
